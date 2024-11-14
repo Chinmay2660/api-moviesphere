@@ -6,12 +6,12 @@ const cors = require('cors');
 const PORT = 8000;
 
 app.use(cors({
-    origin: ['https://moviesphere2660.vercel.app/', 'http://localhost:5173'],
+    origin: ['https://moviesphere2660.vercel.app/', 'http://localhost:5173/'],
 }));
 
 app.get('/api/*', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
     try {
-
         const url = `${process.env.BASE_URL}${req.path.replace('/api', '')}`;
         const response = await axios.get(url, {
             headers: {
