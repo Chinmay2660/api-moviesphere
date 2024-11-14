@@ -2,7 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const app = express();
-const PORT = 3001;
+const cors = require('cors');
+const PORT = 8000;
+
+app.use(cors());
 
 app.get('/api/*', async (req, res) => {
   try {
