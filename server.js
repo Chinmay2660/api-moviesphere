@@ -10,7 +10,6 @@ app.use(cors({
 }));
 
 app.get('/api/*', async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
     try {
         const url = `${process.env.BASE_URL}${req.path.replace('/api', '')}`;
         const response = await axios.get(url, {
@@ -29,4 +28,6 @@ app.get('/api/*', async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Proxy server running on http://localhost:${PORT}`));
+
+module.exports = app;
 
