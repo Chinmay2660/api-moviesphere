@@ -42,9 +42,9 @@ Check out the live demo: [MovieSphere](https://moviesphere2660.vercel.app/)
 
 ## 🛠️ Built With
 
-- **Node.js**: A JavaScript library for building user interfaces.
-- **Express.js**: Fast development tool for building modern web applications.
-- **Axios**: A utility-first CSS framework for rapid UI development.
+- **Node.js**: JavaScript runtime for building server-side applications.
+- **Express.js**: Web framework for building APIs with Node.js.
+- **Axios**: HTTP client for making API requests.
 
 ## 🤝 Contributing
 
