@@ -3,6 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const { getCached, setCached } = require('./cache');
+const { rateLimit } = require('./rateLimiter');
 
 const app = express();
 const PORT = 8000;
@@ -12,6 +13,8 @@ const ALLOWED_PATH_PREFIXES = ['/movie', '/tv', '/search', '/trending', '/discov
 app.use(cors({
     origin: ['https://moviesphere2660.vercel.app', 'http://localhost:5173'],
 }));
+
+app.use('/api', rateLimit);
 
 // Simple retry helper for transient network errors like ECONNRESET
 async function fetchWithRetry(url, options, retries = 3, delayMs = 300) {
