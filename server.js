@@ -1,39 +1,100 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const app = express();
 const cors = require('cors');
+const { getCached, setCached } = require('./cache');
+
+const app = express();
 const PORT = 8000;
+
+const ALLOWED_PATH_PREFIXES = ['/movie', '/tv', '/search', '/trending', '/discover', '/genre', '/configuration'];
 
 app.use(cors({
     origin: ['https://moviesphere2660.vercel.app', 'http://localhost:5173'],
 }));
 
+// Simple retry helper for transient network errors like ECONNRESET
+async function fetchWithRetry(url, options, retries = 3, delayMs = 300) {
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await axios.get(url, options);
+        } catch (error) {
+            lastError = error;
+            const code = error.code;
+            const isTransient =
+                code === 'ECONNRESET' ||
+                code === 'ETIMEDOUT' ||
+                code === 'EAI_AGAIN';
+
+            if (!isTransient || attempt === retries) {
+                throw error;
+            }
+
+            const backoff = delayMs * (attempt + 1);
+            console.warn(
+                `Transient error ${code} on ${url}, retrying in ${backoff}ms (attempt ${
+                    attempt + 1
+                }/${retries + 1})`
+            );
+            await new Promise((resolve) => setTimeout(resolve, backoff));
+        }
+    }
+    throw lastError;
+}
+
+function isPathAllowed(apiPath) {
+    const normalized = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+    return ALLOWED_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(prefix + '/'));
+}
+
 // Express 5 wildcard returns an array, need to join with /
 app.get('/api/{*path}', async (req, res) => {
+    const pathSegments = req.params.path;
+    const apiPath = '/' + (Array.isArray(pathSegments) ? pathSegments.join('/') : pathSegments || '');
+
+    if (!isPathAllowed(apiPath)) {
+        return res.status(400).json({ error: 'Path not allowed' });
+    }
+
+    const cached = getCached(apiPath, req.query);
+    if (cached !== null) {
+        return res.json(cached);
+    }
+
+    const url = `${process.env.BASE_URL}${apiPath}`;
+
     try {
-        // req.params.path is an array in Express 5, join with /
-        const pathSegments = req.params.path;
-        const apiPath = '/' + (Array.isArray(pathSegments) ? pathSegments.join('/') : pathSegments || '');
-        const url = `${process.env.BASE_URL}${apiPath}`;
-        
         console.log('Proxying request to:', url);
-        
-        const response = await axios.get(url, {
-            headers: {
-                Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+
+        const response = await fetchWithRetry(
+            url,
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.ACCESS_TOKEN}`
+                },
+                params: {
+                    api_key: process.env.API_KEY,
+                    ...req.query
+                },
+                timeout: 10000
             },
-            params: {
-                api_key: process.env.API_KEY,
-                ...req.query
-            }
-        });
+            3,
+            300
+        );
+
+        setCached(apiPath, req.query, response.data);
         res.json(response.data);
     } catch (error) {
-        console.error('API Error:', error.response?.status, error.message);
-        res.status(error.response?.status || 500).json({ 
+        console.error('API Error code:', error.code);
+        console.error('API Error message:', error.message);
+        console.error('API Error response status:', error.response?.status);
+        console.error('API Error response data:', error.response?.data);
+
+        res.status(error.response?.status || 500).json({
             error: 'Failed to fetch data',
-            message: error.message
+            message: error.message,
+            code: error.code
         });
     }
 });
