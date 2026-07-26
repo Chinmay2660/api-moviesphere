@@ -2,11 +2,20 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const { getCached, setCached } = require('./cache');
+const { getCached, setCached, getCacheControl } = require('./cache');
 const { rateLimit } = require('./rateLimiter');
+const downloadRouter = require('./routes/download');
 
 const app = express();
 const PORT = 8000;
+
+const requiredEnv = ['BASE_URL', 'API_KEY'];
+const missingEnv = requiredEnv.filter((key) => !process.env[key]);
+if (missingEnv.length > 0) {
+    console.error(
+        `Missing required env: ${missingEnv.join(', ')}. Copy .env.example to .env and set your TMDB credentials.`
+    );
+}
 
 const ALLOWED_PATH_PREFIXES = ['/movie', '/tv', '/search', '/trending', '/discover', '/genre', '/configuration'];
 
@@ -15,6 +24,7 @@ app.use(cors({
 }));
 
 app.use('/api', rateLimit);
+app.use('/api/download', downloadRouter);
 
 // Simple retry helper for transient network errors like ECONNRESET
 async function fetchWithRetry(url, options, retries = 3, delayMs = 300) {
@@ -62,7 +72,16 @@ app.get('/api/{*path}', async (req, res) => {
 
     const cached = getCached(apiPath, req.query);
     if (cached !== null) {
+        res.set('Cache-Control', getCacheControl(apiPath));
+        res.set('X-Cache', 'HIT');
         return res.json(cached);
+    }
+
+    if (!process.env.BASE_URL || !process.env.API_KEY) {
+        return res.status(503).json({
+            error: 'Server not configured',
+            message: 'Missing BASE_URL or API_KEY. Add them to api-moviesphere/.env (see .env.example).',
+        });
     }
 
     const url = `${process.env.BASE_URL}${apiPath}`;
@@ -78,7 +97,9 @@ app.get('/api/{*path}', async (req, res) => {
                 },
                 params: {
                     api_key: process.env.API_KEY,
-                    ...req.query
+                    region: 'IN',
+                    language: 'en-IN',
+                    ...req.query,
                 },
                 timeout: 10000
             },
@@ -87,6 +108,8 @@ app.get('/api/{*path}', async (req, res) => {
         );
 
         setCached(apiPath, req.query, response.data);
+        res.set('Cache-Control', getCacheControl(apiPath));
+        res.set('X-Cache', 'MISS');
         res.json(response.data);
     } catch (error) {
         console.error('API Error code:', error.code);

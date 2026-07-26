@@ -25,7 +25,9 @@ function rateLimit(req, res, next) {
 
   if (entry.count > MAX_REQUESTS_PER_WINDOW) {
     res.set('Retry-After', String(Math.ceil(WINDOW_MS / 1000)));
-    return res.status(429).json({ error: 'Too many requests', retryAfter: Math.ceil(WINDOW_MS / 1000) });
+    return res.status(429).json({
+      error: "We're getting a lot of requests. Please wait a moment and try again.",
+    });
   }
 
   next();
