@@ -13,7 +13,16 @@ assert(urls.some((u) => u.includes('.mp4')), 'extractMediaUrls should find mp4')
 const picked = pickBestUrl(urls);
 assert(picked && !picked.isHls, 'pickBestUrl should prefer mp4');
 
-assert(VIDSRC_PROVIDERS.length === 1, 'only vidsrc.sbs provider');
-assert(VIDSRC_PROVIDERS[0].id === 'vidsrc_sbs', 'vidsrc_sbs is the provider');
+const provider = VIDSRC_PROVIDERS[0];
+assert(provider.id === 'vidsrc_sbs', 'vidsrc_sbs provider configured');
+assert(
+  provider.buildUrl({ type: 'movie', tmdbId: '123' }) === 'https://vidsrc.sbs/embed/movie/123',
+  'movie embed url'
+);
+assert(
+  provider.buildUrl({ type: 'tv', tmdbId: '456', season: 1, episode: 2 }) ===
+    'https://vidsrc.sbs/embed/tv/456/1/2',
+  'tv embed url'
+);
 
 console.log('resolver-selfcheck: ok');

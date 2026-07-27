@@ -14,7 +14,7 @@ const handleDownload = async (req, res, { type, tmdbId, season, episode, filenam
   const safeName = sanitizeFilename(filename);
 
   try {
-    const resolved = await resolveDownloadStream({ type, tmdbId, season, episode });
+    const resolved = await resolveDownloadStream({ type, tmdbId, season, episode, title: filename });
     res.setHeader('X-Download-Source', resolved.source);
     if (resolved.isHls) {
       res.setHeader('X-Download-Format', 'hls');
