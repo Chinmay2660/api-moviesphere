@@ -9,11 +9,20 @@ const downloadRouter = require('./routes/download');
 const app = express();
 const PORT = 8000;
 
+app.disable('x-powered-by');
+
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
+
 const requiredEnv = ['BASE_URL', 'API_KEY'];
 const missingEnv = requiredEnv.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {
-    console.error(
-        `Missing required env: ${missingEnv.join(', ')}. Copy .env.example to .env and set your TMDB credentials.`
+    process.stderr.write(
+        `Missing required env: ${missingEnv.join(', ')}. Copy .env.example to .env and set your TMDB credentials.\n`
     );
 }
 
@@ -45,11 +54,6 @@ async function fetchWithRetry(url, options, retries = 3, delayMs = 300) {
             }
 
             const backoff = delayMs * (attempt + 1);
-            console.warn(
-                `Transient error ${code} on ${url}, retrying in ${backoff}ms (attempt ${
-                    attempt + 1
-                }/${retries + 1})`
-            );
             await new Promise((resolve) => setTimeout(resolve, backoff));
         }
     }
@@ -87,8 +91,6 @@ app.get('/api/{*path}', async (req, res) => {
     const url = `${process.env.BASE_URL}${apiPath}`;
 
     try {
-        console.log('Proxying request to:', url);
-
         const response = await fetchWithRetry(
             url,
             {
@@ -112,19 +114,14 @@ app.get('/api/{*path}', async (req, res) => {
         res.set('X-Cache', 'MISS');
         res.json(response.data);
     } catch (error) {
-        console.error('API Error code:', error.code);
-        console.error('API Error message:', error.message);
-        console.error('API Error response status:', error.response?.status);
-        console.error('API Error response data:', error.response?.data);
+        const status = error.response?.status || 500;
 
-        res.status(error.response?.status || 500).json({
+        res.status(status).json({
             error: 'Failed to fetch data',
-            message: error.message,
-            code: error.code
         });
     }
 });
 
-app.listen(PORT, () => console.log(`Proxy server running on http://localhost:${PORT}`));
+app.listen(PORT);
 
 module.exports = app;

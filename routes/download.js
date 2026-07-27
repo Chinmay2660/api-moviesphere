@@ -5,6 +5,8 @@ const { toUserMessage } = require('../lib/userFriendlyError');
 
 const router = express.Router();
 
+const isNumericId = (value) => /^\d{1,10}$/.test(String(value));
+
 const sanitizeFilename = (name) =>
   (name || 'video').replace(/[^\w\s.-]/g, '').trim().slice(0, 80) || 'video';
 
@@ -22,7 +24,6 @@ const handleDownload = async (req, res, { type, tmdbId, season, episode, filenam
       filename: `${safeName}.mp4`,
     });
   } catch (error) {
-    console.error('Download resolve error:', error.message);
     if (!res.headersSent) {
       res.status(404).json({
         error: toUserMessage(error, 'download'),
@@ -32,6 +33,9 @@ const handleDownload = async (req, res, { type, tmdbId, season, episode, filenam
 };
 
 router.get('/movie/:id', (req, res) => {
+  if (!isNumericId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid movie id' });
+  }
   const title = req.query.title || `movie-${req.params.id}`;
   handleDownload(req, res, {
     type: 'movie',
@@ -41,6 +45,10 @@ router.get('/movie/:id', (req, res) => {
 });
 
 router.get('/tv/:tvId/:season/:episode', (req, res) => {
+  const { tvId, season, episode } = req.params;
+  if (!isNumericId(tvId) || !isNumericId(season) || !isNumericId(episode)) {
+    return res.status(400).json({ error: 'Invalid tv id, season, or episode' });
+  }
   const title =
     req.query.title ||
     `tv-${req.params.tvId}-s${req.params.season}-e${req.params.episode}`;
