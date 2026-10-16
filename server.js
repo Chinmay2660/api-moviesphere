@@ -3,12 +3,13 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const { getCached, setCached, getCacheControl } = require('./cache');
-const { rateLimit } = require('./rateLimiter');
+const { rateLimit, downloadRateLimit } = require('./rateLimiter');
 const downloadRouter = require('./routes/download');
 
 const app = express();
 const PORT = 8000;
 
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
 app.use((req, res, next) => {
@@ -33,6 +34,7 @@ app.use(cors({
 }));
 
 app.use('/api', rateLimit);
+app.use('/api/download', downloadRateLimit);
 app.use('/api/download', downloadRouter);
 
 // Simple retry helper for transient network errors like ECONNRESET

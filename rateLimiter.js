@@ -1,36 +1,81 @@
 const WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 100;
-
-const store = new Map();
+const MAX_DOWNLOAD_REQUESTS_PER_WINDOW = 8;
 
 function getClientIp(req) {
-  const forwarded = req.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
+  // ponytail: use req.ip only (requires trust proxy); raw X-Forwarded-For is client-spoofable
   return req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
-function rateLimit(req, res, next) {
-  const ip = getClientIp(req);
-  const now = Date.now();
-  let entry = store.get(ip);
+function createRateLimiter({ windowMs, maxRequests }) {
+  const store = new Map();
 
-  if (!entry || now - entry.windowStart >= WINDOW_MS) {
-    entry = { count: 0, windowStart: now };
-    store.set(ip, entry);
-  }
+  const pruneStale = (now) => {
+    if (store.size < 5000) return;
+    for (const [key, entry] of store) {
+      if (now - entry.windowStart >= windowMs * 2) store.delete(key);
+    }
+  };
 
-  entry.count += 1;
+  return function rateLimit(req, res, next) {
+    const ip = getClientIp(req);
+    const now = Date.now();
+    pruneStale(now);
 
-  if (entry.count > MAX_REQUESTS_PER_WINDOW) {
-    res.set('Retry-After', String(Math.ceil(WINDOW_MS / 1000)));
-    return res.status(429).json({
-      error: "We're getting a lot of requests. Please wait a moment and try again.",
-    });
-  }
+    let entry = store.get(ip);
 
-  next();
+    if (!entry || now - entry.windowStart >= windowMs) {
+      entry = { count: 0, windowStart: now };
+      store.set(ip, entry);
+    }
+
+    entry.count += 1;
+
+    if (entry.count > maxRequests) {
+      res.set('Retry-After', String(Math.ceil(windowMs / 1000)));
+      return res.status(429).json({
+        error: "We're getting a lot of requests. Please wait a moment and try again.",
+      });
+    }
+
+    next();
+  };
 }
 
-module.exports = { rateLimit, WINDOW_MS, MAX_REQUESTS_PER_WINDOW };
+const rateLimit = createRateLimiter({
+  windowMs: WINDOW_MS,
+  maxRequests: MAX_REQUESTS_PER_WINDOW,
+});
+
+const downloadRateLimit = createRateLimiter({
+  windowMs: WINDOW_MS,
+  maxRequests: MAX_DOWNLOAD_REQUESTS_PER_WINDOW,
+});
+
+if (require.main === module) {
+  const hits = [];
+  const res = {
+    set() {},
+    status(code) {
+      hits.push(code);
+      return { json() {} };
+    },
+  };
+  const limiter = createRateLimiter({ windowMs: 60_000, maxRequests: 2 });
+  const req = { ip: '127.0.0.1', socket: {} };
+  limiter(req, res, () => hits.push('ok'));
+  limiter(req, res, () => hits.push('ok'));
+  limiter(req, res, () => hits.push('ok'));
+  if (hits.filter((h) => h === 'ok').length !== 2 || hits.includes(429) !== true) {
+    throw new Error('rateLimiter self-check failed');
+  }
+}
+
+module.exports = {
+  rateLimit,
+  downloadRateLimit,
+  createRateLimiter,
+  WINDOW_MS,
+  MAX_REQUESTS_PER_WINDOW,
+  MAX_DOWNLOAD_REQUESTS_PER_WINDOW,
+};
