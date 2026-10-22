@@ -37,6 +37,22 @@ app.use(cors({
     origin: corsOrigins,
 }));
 
+app.get('/', (req, res) => {
+    res.status(200).json({
+        service: 'api-moviesphere',
+        status: 'ok',
+        configured: Boolean(process.env.BASE_URL && process.env.API_KEY),
+        endpoints: '/api/{movie|tv|search|trending|discover|genre|configuration}/…',
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        configured: Boolean(process.env.BASE_URL && process.env.API_KEY),
+    });
+});
+
 app.use('/api', requireBrowserClient);
 app.use('/api', rateLimit);
 app.use('/api/download', downloadRateLimit);
@@ -127,6 +143,13 @@ app.get('/api/{*path}', async (req, res) => {
             error: 'Failed to fetch data',
         });
     }
+});
+
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Not found',
+        message: 'This host only serves /api/…. Use the MovieSphere frontend or call /api with an allowed Origin.',
+    });
 });
 
 if (require.main === module) {
