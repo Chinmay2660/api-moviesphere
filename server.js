@@ -4,6 +4,8 @@ const axios = require('axios');
 const cors = require('cors');
 const { getCached, setCached, getCacheControl } = require('./cache');
 const { rateLimit, downloadRateLimit } = require('./rateLimiter');
+const { requireBrowserClient } = require('./lib/clientAccess');
+const { sanitizeTmdbQuery } = require('./lib/sanitizeTmdbQuery');
 const downloadRouter = require('./routes/download');
 
 const app = express();
@@ -29,10 +31,13 @@ if (missingEnv.length > 0) {
 
 const ALLOWED_PATH_PREFIXES = ['/movie', '/tv', '/search', '/trending', '/discover', '/genre', '/configuration'];
 
+const corsOrigins = require('./lib/clientAccess').parseAllowedOrigins();
+
 app.use(cors({
-    origin: ['https://moviesphere2660.vercel.app', 'http://localhost:5173'],
+    origin: corsOrigins,
 }));
 
+app.use('/api', requireBrowserClient);
 app.use('/api', rateLimit);
 app.use('/api/download', downloadRateLimit);
 app.use('/api/download', downloadRouter);
@@ -103,7 +108,7 @@ app.get('/api/{*path}', async (req, res) => {
                     api_key: process.env.API_KEY,
                     region: 'IN',
                     language: 'en-IN',
-                    ...req.query,
+                    ...sanitizeTmdbQuery(req.query),
                 },
                 timeout: 10000
             },
@@ -124,6 +129,8 @@ app.get('/api/{*path}', async (req, res) => {
     }
 });
 
-app.listen(PORT);
+if (require.main === module) {
+    app.listen(PORT);
+}
 
 module.exports = app;

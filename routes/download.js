@@ -10,6 +10,8 @@ const isNumericId = (value) => /^\d{1,10}$/.test(String(value));
 const sanitizeFilename = (name) =>
   (name || 'video').replace(/[^\w\s.-]/g, '').trim().slice(0, 80) || 'video';
 
+const MAX_TITLE_QUERY_LEN = 120;
+
 const handleDownload = async (req, res, { type, tmdbId, season, episode, filename }) => {
   const safeName = sanitizeFilename(filename);
 
@@ -36,7 +38,7 @@ router.get('/movie/:id', (req, res) => {
   if (!isNumericId(req.params.id)) {
     return res.status(400).json({ error: 'Invalid movie id' });
   }
-  const title = req.query.title || `movie-${req.params.id}`;
+  const title = String(req.query.title || `movie-${req.params.id}`).slice(0, MAX_TITLE_QUERY_LEN);
   handleDownload(req, res, {
     type: 'movie',
     tmdbId: req.params.id,
@@ -49,9 +51,10 @@ router.get('/tv/:tvId/:season/:episode', (req, res) => {
   if (!isNumericId(tvId) || !isNumericId(season) || !isNumericId(episode)) {
     return res.status(400).json({ error: 'Invalid tv id, season, or episode' });
   }
-  const title =
+  const title = String(
     req.query.title ||
-    `tv-${req.params.tvId}-s${req.params.season}-e${req.params.episode}`;
+      `tv-${req.params.tvId}-s${req.params.season}-e${req.params.episode}`
+  ).slice(0, MAX_TITLE_QUERY_LEN);
   handleDownload(req, res, {
     type: 'tv',
     tmdbId: req.params.tvId,
