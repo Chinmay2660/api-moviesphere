@@ -7,6 +7,7 @@ const { rateLimit, downloadRateLimit } = require('./rateLimiter');
 const { requireBrowserClient } = require('./lib/clientAccess');
 const { sanitizeTmdbQuery } = require('./lib/sanitizeTmdbQuery');
 const downloadRouter = require('./routes/download');
+const streamRouter = require('./routes/stream');
 
 const app = express();
 const PORT = 8000;
@@ -57,6 +58,8 @@ app.use('/api', requireBrowserClient);
 app.use('/api', rateLimit);
 app.use('/api/download', downloadRateLimit);
 app.use('/api/download', downloadRouter);
+app.use('/api/stream', downloadRateLimit);
+app.use('/api/stream', streamRouter);
 
 // Simple retry helper for transient network errors like ECONNRESET
 async function fetchWithRetry(url, options, retries = 3, delayMs = 300) {
@@ -138,6 +141,9 @@ app.get('/api/{*path}', async (req, res) => {
         res.json(response.data);
     } catch (error) {
         const status = error.response?.status || 500;
+        if (status >= 500) {
+            console.error('TMDB proxy error:', error.message);
+        }
 
         res.status(status).json({
             error: 'Failed to fetch data',

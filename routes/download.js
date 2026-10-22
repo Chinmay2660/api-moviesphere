@@ -12,6 +12,19 @@ const sanitizeFilename = (name) =>
 
 const MAX_TITLE_QUERY_LEN = 120;
 
+const handleDownloadMeta = async (res, { type, tmdbId, season, episode, title }) => {
+  try {
+    const resolved = await resolveDownloadStream({ type, tmdbId, season, episode, title });
+    res.json({
+      available: true,
+      source: resolved.source,
+      isHls: Boolean(resolved.isHls),
+    });
+  } catch {
+    res.json({ available: false });
+  }
+};
+
 const handleDownload = async (req, res, { type, tmdbId, season, episode, filename }) => {
   const safeName = sanitizeFilename(filename);
 
@@ -39,6 +52,13 @@ router.get('/movie/:id', (req, res) => {
     return res.status(400).json({ error: 'Invalid movie id' });
   }
   const title = String(req.query.title || `movie-${req.params.id}`).slice(0, MAX_TITLE_QUERY_LEN);
+  if (req.query.meta === '1') {
+    return handleDownloadMeta(res, {
+      type: 'movie',
+      tmdbId: req.params.id,
+      title,
+    });
+  }
   handleDownload(req, res, {
     type: 'movie',
     tmdbId: req.params.id,
@@ -55,6 +75,15 @@ router.get('/tv/:tvId/:season/:episode', (req, res) => {
     req.query.title ||
       `tv-${req.params.tvId}-s${req.params.season}-e${req.params.episode}`
   ).slice(0, MAX_TITLE_QUERY_LEN);
+  if (req.query.meta === '1') {
+    return handleDownloadMeta(res, {
+      type: 'tv',
+      tmdbId: req.params.tvId,
+      season: req.params.season,
+      episode: req.params.episode,
+      title,
+    });
+  }
   handleDownload(req, res, {
     type: 'tv',
     tmdbId: req.params.tvId,
